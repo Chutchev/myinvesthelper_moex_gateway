@@ -24,9 +24,14 @@ func NewRouter(moexService moex.Service, cbrService cbr.Service) http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		status = http.StatusInternalServerError
+		payload = []byte(`{"error":"internal server error"}`)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	_, _ = w.Write(payload)
 }
 
 func writeServiceError(w http.ResponseWriter, err error) {

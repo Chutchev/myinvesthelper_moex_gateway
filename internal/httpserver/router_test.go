@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -67,6 +68,15 @@ func TestHealth(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want application/json", got)
 	}
 	assertJSON(t, response, map[string]any{"status": "ok"})
+}
+
+func TestHealthRejectsPOSTWithAllowedMethod(t *testing.T) {
+	response := requestMethod(t, httpserver.NewRouter(&fakeMOEXService{}, &fakeCBRService{}), http.MethodPost, "/health")
+
+	assertStatus(t, response, http.StatusMethodNotAllowed)
+	if allowed := response.Header().Get("Allow"); !strings.Contains(allowed, http.MethodGet) {
+		t.Fatalf("Allow = %q, want it to include GET", allowed)
+	}
 }
 
 func TestBondRejectsInvalidISIN(t *testing.T) {
@@ -134,6 +144,18 @@ func TestBondEncodesResult(t *testing.T) {
 	if service.bondCalls != 1 {
 		t.Fatalf("Bond calls = %d, want 1", service.bondCalls)
 	}
+}
+
+func TestBondEncodingFailureReturnsInternalServerError(t *testing.T) {
+	invalidNumber := math.NaN()
+	service := &fakeMOEXService{bond: moex.Bond{ISIN: "RU000A10ABC1", Price: &invalidNumber}}
+	response := request(t, httpserver.NewRouter(service, &fakeCBRService{}), "/v1/bonds/RU000A10ABC1")
+
+	assertStatus(t, response, http.StatusInternalServerError)
+	if got := strings.TrimSpace(response.Body.String()); got != `{"error":"internal server error"}` {
+		t.Fatalf("body = %q, want stable internal error JSON", got)
+	}
+	assertJSON(t, response, map[string]any{"error": "internal server error"})
 }
 
 func TestMarketUniverseRejectsInvalidLimit(t *testing.T) {
@@ -250,13 +272,23 @@ func TestCBRRatesEncodesResult(t *testing.T) {
 
 func request(t *testing.T, handler http.Handler, target string) *httptest.ResponseRecorder {
 	t.Helper()
-	return requestWithContext(t, handler, target, context.Background())
+	return requestMethodWithContext(t, handler, http.MethodGet, target, context.Background())
+}
+
+func requestMethod(t *testing.T, handler http.Handler, method, target string) *httptest.ResponseRecorder {
+	t.Helper()
+	return requestMethodWithContext(t, handler, method, target, context.Background())
 }
 
 func requestWithContext(t *testing.T, handler http.Handler, target string, ctx context.Context) *httptest.ResponseRecorder {
 	t.Helper()
+	return requestMethodWithContext(t, handler, http.MethodGet, target, ctx)
+}
+
+func requestMethodWithContext(t *testing.T, handler http.Handler, method, target string, ctx context.Context) *httptest.ResponseRecorder {
+	t.Helper()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, target, nil).WithContext(ctx)
+	request := httptest.NewRequest(method, target, nil).WithContext(ctx)
 	handler.ServeHTTP(recorder, request)
 	return recorder
 }
