@@ -26,6 +26,9 @@ func New(cfg config.Config) *App {
 			Addr:              cfg.Server.Address(),
 			Handler:           router,
 			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		},
 	}
 }
@@ -52,6 +55,9 @@ func (a *App) Run(ctx context.Context) error {
 	close(serverDone)
 	shutdownErr := <-shutdownDone
 	if shutdownErr != nil {
+		if closeErr := a.server.Close(); closeErr != nil {
+			return fmt.Errorf("shut down HTTP server: %w; force close: %v", shutdownErr, closeErr)
+		}
 		return fmt.Errorf("shut down HTTP server: %w", shutdownErr)
 	}
 	if errors.Is(err, http.ErrServerClosed) {

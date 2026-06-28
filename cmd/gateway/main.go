@@ -18,7 +18,18 @@ func main() {
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	stopWatcher := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			stop()
+		case <-stopWatcher:
+		}
+	}()
+	defer func() {
+		close(stopWatcher)
+		stop()
+	}()
 
 	if err := app.New(*cfg).Run(ctx); err != nil {
 		log.Fatal(err)
