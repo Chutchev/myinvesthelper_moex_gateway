@@ -1,9 +1,18 @@
 package moex
 
-type Cashflow struct {
+type Coupon struct {
 	Date  string  `json:"date"`
 	Value float64 `json:"value"`
 }
+
+type Cashflow struct {
+	Date    string  `json:"date"`
+	Amount  float64 `json:"amount"`
+	Kind    string  `json:"kind"`
+	Taxable bool    `json:"taxable"`
+}
+
+type MarketUniverse []Bond
 
 type Bond struct {
 	ISIN                 string     `json:"isin"`
@@ -50,6 +59,6 @@ type Bond struct {
 	MorningSession       *bool      `json:"morning_session"`
 	EveningSession       *bool      `json:"evening_session"`
 	WeekendSession       *bool      `json:"weekend_session"`
-	CouponCalendar       []Cashflow `json:"coupon_calendar"`
+	CouponCalendar       []Coupon   `json:"coupon_calendar"`
 	CashflowSchedule     []Cashflow `json:"cashflow_schedule"`
 }
