@@ -20,8 +20,8 @@ func TestLoadReadsGatewayConfiguration(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if got, want := cfg.Address(), "127.0.0.1:9090"; got != want {
-		t.Errorf("Address() = %q, want %q", got, want)
+	if got, want := cfg.Server.Address(), "127.0.0.1:9090"; got != want {
+		t.Errorf("Server.Address() = %q, want %q", got, want)
 	}
 	if got, want := cfg.MOEXBaseURL, "https://moex.test"; got != want {
 		t.Errorf("MOEXBaseURL = %q, want %q", got, want)

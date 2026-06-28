@@ -19,8 +19,8 @@ type Config struct {
 
 type ServerConfig struct{ Host, Port string }
 
-func (c *Config) Address() string {
-	return net.JoinHostPort(c.Server.Host, c.Server.Port)
+func (s ServerConfig) Address() string {
+	return net.JoinHostPort(s.Host, s.Port)
 }
 
 func Load() (*Config, error) {
