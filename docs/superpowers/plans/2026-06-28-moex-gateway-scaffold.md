@@ -272,46 +272,37 @@ Expected: PASS.
 
 ### Task 4: Application lifecycle and executable
 
+> **User override from Task 4 onward:** Do not create or run tests. Verify Tasks
+> 4 and 5 only with formatting, vet, build, and diff checks.
+
 **Files:**
 - Replace: `internal/app/App.go` with `internal/app/app.go`
 - Create: `cmd/gateway/main.go`
 - Delete: `cmd/app/main.go`
 
-- [ ] **Step 1: Write lifecycle constructor test**
-
-Create `internal/app/app_test.go` and verify `New` returns an app whose handler
-serves `/health` successfully without opening a listener:
-
-```go
-application := New(config.Config{Server: config.ServerConfig{Host: "127.0.0.1", Port: "0"}})
-request := httptest.NewRequest(http.MethodGet, "/health", nil)
-response := httptest.NewRecorder()
-application.Handler().ServeHTTP(response, request)
-if response.Code != http.StatusOK { t.Fatalf("status = %d", response.Code) }
-```
-
-- [ ] **Step 2: Run the app test and verify failure**
-
-Run: `go test ./internal/app`
-
-Expected: compilation fails because `New` and `Handler` do not exist.
-
-- [ ] **Step 3: Implement lifecycle wiring**
+- [ ] **Step 1: Implement lifecycle wiring**
 
 `app.New` constructs the stub MOEX and CBR services, router, and `http.Server`.
-Expose `Handler()` for tests. Implement `Run(ctx)` with `ListenAndServe`, a
-goroutine waiting on context cancellation, and a five-second graceful shutdown
-timeout. Treat `http.ErrServerClosed` as success.
+Expose `Handler()` as the HTTP boundary. Implement `Run(ctx)` with
+`ListenAndServe`, a goroutine waiting on context cancellation, and a five-second
+graceful shutdown timeout. Treat `http.ErrServerClosed` as success.
 
 `cmd/gateway/main.go` loads config, creates a signal-aware context for SIGINT and
 SIGTERM, runs the app, and logs fatal startup/runtime errors. It contains no
 domain logic.
 
-- [ ] **Step 4: Remove the obsolete entry point and verify**
+- [ ] **Step 2: Remove the obsolete entry point and verify**
 
-Run: `gofmt -w cmd internal/app && go test ./internal/app && go build ./...`
+Run:
 
-Expected: tests pass and all packages build.
+```bash
+gofmt -w cmd internal/app
+go vet ./...
+go build ./...
+git diff --check
+```
+
+Expected: formatting completes and vet, build, and diff checks exit 0.
 
 ### Task 5: Developer-facing project scaffold
 
@@ -330,7 +321,8 @@ secrets or Redis settings.
 - [ ] **Step 2: Add standard commands**
 
 Make targets must be `run`, `test`, `vet`, `build`, and `fmt`, each invoking the
-corresponding Go command. Mark all targets phony.
+corresponding Go command. Mark all targets phony and set `build` as the default
+goal. The `test` command is documented but is not run in this task.
 
 - [ ] **Step 3: Add concise README**
 
@@ -344,12 +336,11 @@ Run:
 
 ```bash
 gofmt -w cmd internal
-go test ./...
 go vet ./...
 go build ./...
 git diff --check
 ```
 
-Expected: every command exits 0. Confirm with `git status --short` that the
-pre-existing user changes were migrated into the approved locations and no
-unrelated files changed.
+Expected: every command exits 0 without running tests. Confirm with
+`git status --short` that pre-existing user changes were migrated into the
+approved locations and no unrelated files changed.
