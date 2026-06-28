@@ -8,7 +8,7 @@ import (
 
 type Service interface {
 	Bond(ctx context.Context, isin string) (Bond, error)
-	MarketUniverse(ctx context.Context, limit int) ([]Bond, error)
+	MarketUniverse(ctx context.Context, limit int) (MarketUniverse, error)
 }
 
 type StubService struct{}
@@ -21,6 +21,6 @@ func (s *StubService) Bond(context.Context, string) (Bond, error) {
 	return Bond{}, apperrors.ErrNotImplemented
 }
 
-func (s *StubService) MarketUniverse(context.Context, int) ([]Bond, error) {
+func (s *StubService) MarketUniverse(context.Context, int) (MarketUniverse, error) {
 	return nil, apperrors.ErrNotImplemented
 }

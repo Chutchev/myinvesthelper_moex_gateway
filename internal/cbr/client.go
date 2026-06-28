@@ -20,6 +20,9 @@ type HTTPClient struct {
 }
 
 func NewHTTPClient(keyRateURL, forecastURL string, client *http.Client) *HTTPClient {
+	if client == nil {
+		client = http.DefaultClient
+	}
 	return &HTTPClient{
 		keyRateURL:  keyRateURL,
 		forecastURL: forecastURL,
