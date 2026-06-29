@@ -156,12 +156,35 @@ func TestCachedServiceBond_CacheMiss(t *testing.T) {
 	fc := &fakeClient{}
 	fcCache := &fakeCache{store: make(map[string][]byte)}
 
-	// Stub parsers for this test — they'll be real after Task 4.
-	// For now we verify the service calls the client 3 times.
+	// Provide valid payloads so parsers succeed
+	fc.description = []byte(`{
+		"description": {
+			"columns": ["SECID", "MATDATE", "FACEVALUE", "FACEUNIT", "COUPONTYPE"],
+			"data": [["RU000A10ABC1", "2026-01-15", "10000", "RUB", "фиксированный"]]
+		}
+	}`)
+	fc.marketData = []byte(`{
+		"marketdata": {
+			"columns": ["LAST", "ACCINT", "DURATION", "VALTODAY", "NUMTRADES"],
+			"data": [["100", "5", "1.5", "1000000", "10"]]
+		}
+	}`)
+	fc.bondization = []byte(`{
+		"coupons": {
+			"columns": ["COUPONDATE", "VALUE"],
+			"data": [["2025-03-15", "100"]]
+		},
+		"principal": {
+			"columns": ["DATE", "VALUE"],
+			"data": [["2026-01-15", "10000"]]
+		}
+	}`)
+
 	svc := NewService(fc, fcCache, 15*time.Minute)
-	_, _ = svc.Bond(context.Background(), "RU000A10ABC1")
-	// Will fail because parsers don't exist yet — that's expected.
-	// We verify the client was called.
+	_, err := svc.Bond(context.Background(), "RU000A10ABC1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	if fc.descCalls != 1 {
 		t.Errorf("descCalls = %d, want 1", fc.descCalls)
 	}
@@ -170,6 +193,15 @@ func TestCachedServiceBond_CacheMiss(t *testing.T) {
 	}
 	if fc.bondCalls != 1 {
 		t.Errorf("bondCalls = %d, want 1", fc.bondCalls)
+	}
+	// Verify the bond was cached
+	var cached Bond
+	err = fcCache.Get(context.Background(), "moex:bond:RU000A10ABC1", &cached)
+	if err != nil {
+		t.Fatalf("expected bond to be cached, got error: %v", err)
+	}
+	if cached.ISIN != "RU000A10ABC1" {
+		t.Errorf("cached bond ISIN = %s, want RU000A10ABC1", cached.ISIN)
 	}
 }
 

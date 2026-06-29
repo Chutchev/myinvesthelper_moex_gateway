@@ -14,6 +14,27 @@ import (
 
 const defaultCacheTTL = 15 * time.Minute
 
+// Service defines the bond data service interface.
+type Service interface {
+	Bond(ctx context.Context, isin string) (Bond, error)
+	MarketUniverse(ctx context.Context, limit int) (MarketUniverse, error)
+}
+
+// StubService is a placeholder implementation for bootstrapping.
+type StubService struct{}
+
+func NewStubService() *StubService {
+	return &StubService{}
+}
+
+func (s *StubService) Bond(ctx context.Context, isin string) (Bond, error) {
+	return Bond{}, fmt.Errorf("%w: stub service", apperrors.ErrNotImplemented)
+}
+
+func (s *StubService) MarketUniverse(ctx context.Context, limit int) (MarketUniverse, error) {
+	return nil, fmt.Errorf("%w: stub service", apperrors.ErrNotImplemented)
+}
+
 type CachedService struct {
 	client Client
 	cache  cache.Cache
