@@ -4,23 +4,32 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
+	_ "github.com/Chutchev/myinvesthelper_moex_gateway/docs"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/apperrors"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/moex"
+	swaggofiber "github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
 )
 
-type errorResponse struct {
+type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
 func NewRouter(moexService moex.Service, cbrService cbr.Service) *fiber.App {
-	app := fiber.New(fiber.Config{ErrorHandler: fiberErrorHandler})
+	app := fiber.New(fiber.Config{
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		ErrorHandler: fiberErrorHandler,
+	})
 	app.Get("/health", healthHandler)
 	app.Get("/v1/bonds/:isin", newBondHandler(moexService))
 	app.Get("/v1/bonds", newMarketUniverseHandler(moexService))
 	app.Get("/v1/cbr/rates", newCBRRatesHandler(cbrService))
+	app.Get("/swagger/*", swaggofiber.HandlerDefault)
 	return app
 }
 
@@ -32,7 +41,7 @@ func fiberErrorHandler(c fiber.Ctx, err error) error {
 		status = fiberErr.Code
 		message = fiberErr.Message
 	}
-	return writeJSON(c, status, errorResponse{Error: message})
+	return writeJSON(c, status, ErrorResponse{Error: message})
 }
 
 func writeJSON(c fiber.Ctx, status int, value any) error {
@@ -46,7 +55,7 @@ func writeJSON(c fiber.Ctx, status int, value any) error {
 
 func writeServiceError(c fiber.Ctx, err error) error {
 	if errors.Is(err, apperrors.ErrNotImplemented) {
-		return writeJSON(c, http.StatusNotImplemented, errorResponse{Error: "not implemented"})
+		return writeJSON(c, http.StatusNotImplemented, ErrorResponse{Error: "not implemented"})
 	}
-	return writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+	return writeJSON(c, http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
 }

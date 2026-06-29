@@ -13,11 +13,21 @@ const (
 	maxUniverseLimit     = 200
 )
 
+// newBondHandler godoc
+// @Summary Get a MOEX bond
+// @Tags bonds
+// @Produce json
+// @Param isin path string true "ISIN" minlength(12) maxlength(12)
+// @Success 200 {object} moex.Bond
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Failure 501 {object} ErrorResponse
+// @Router /v1/bonds/{isin} [get]
 func newBondHandler(service moex.Service) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		isin := c.Params("isin")
 		if !validISIN(isin) {
-			return writeJSON(c, http.StatusBadRequest, errorResponse{Error: "invalid ISIN"})
+			return writeJSON(c, http.StatusBadRequest, ErrorResponse{Error: "invalid ISIN"})
 		}
 
 		bond, err := service.Bond(c.Context(), isin)
@@ -28,11 +38,21 @@ func newBondHandler(service moex.Service) fiber.Handler {
 	}
 }
 
+// newMarketUniverseHandler godoc
+// @Summary List MOEX bonds
+// @Tags bonds
+// @Produce json
+// @Param limit query int false "Maximum number of bonds" default(40) minimum(1) maximum(200)
+// @Success 200 {array} moex.Bond
+// @Failure 400 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Failure 501 {object} ErrorResponse
+// @Router /v1/bonds [get]
 func newMarketUniverseHandler(service moex.Service) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		limit, ok := parseLimit(c.Query("limit"))
 		if !ok {
-			return writeJSON(c, http.StatusBadRequest, errorResponse{Error: "invalid limit"})
+			return writeJSON(c, http.StatusBadRequest, ErrorResponse{Error: "invalid limit"})
 		}
 
 		universe, err := service.MarketUniverse(c.Context(), limit)

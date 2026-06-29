@@ -11,6 +11,10 @@ import (
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/config"
 )
 
+// @title MOEX Gateway API
+// @version 1.0
+// @description Normalized MOEX bond and Bank of Russia rate data.
+// @BasePath /
 func main() {
 	cfg, err := config.Load()
 	if err != nil {

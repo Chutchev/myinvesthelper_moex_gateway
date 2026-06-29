@@ -79,6 +79,36 @@ func TestHealthRejectsPOSTWithAllowedMethod(t *testing.T) {
 	}
 }
 
+func TestSwaggerUI(t *testing.T) {
+	response := request(t, httpserver.NewRouter(&fakeMOEXService{}, &fakeCBRService{}), "/swagger/index.html")
+
+	assertStatus(t, response, http.StatusOK)
+	if !strings.Contains(response.Body.String(), "Swagger UI") {
+		t.Fatalf("body does not contain Swagger UI: %s", response.Body.String())
+	}
+}
+
+func TestSwaggerDocumentContainsPublicPaths(t *testing.T) {
+	response := request(t, httpserver.NewRouter(&fakeMOEXService{}, &fakeCBRService{}), "/swagger/doc.json")
+
+	assertStatus(t, response, http.StatusOK)
+	var document struct {
+		Paths       map[string]any `json:"paths"`
+		Definitions map[string]any `json:"definitions"`
+	}
+	decodeJSON(t, response, &document)
+	for _, path := range []string{"/health", "/v1/bonds", "/v1/bonds/{isin}", "/v1/cbr/rates"} {
+		if _, ok := document.Paths[path]; !ok {
+			t.Errorf("Swagger path %q is missing", path)
+		}
+	}
+	for _, schema := range []string{"cbr.RateSnapshot", "httpserver.ErrorResponse", "moex.Bond"} {
+		if _, ok := document.Definitions[schema]; !ok {
+			t.Errorf("Swagger schema %q is missing", schema)
+		}
+	}
+}
+
 func TestBondRejectsInvalidISIN(t *testing.T) {
 	for _, isin := range []string{"bad", "RU000A10abc1", "RU000A10ABC!", "RU000A10ABC12"} {
 		t.Run(isin, func(t *testing.T) {

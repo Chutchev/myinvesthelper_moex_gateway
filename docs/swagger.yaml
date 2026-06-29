@@ -1,0 +1,287 @@
+basePath: /
+definitions:
+  cbr.Direction:
+    enum:
+    - up
+    - flat
+    - down
+    - unknown
+    type: string
+    x-enum-varnames:
+    - DirectionUp
+    - DirectionFlat
+    - DirectionDown
+    - DirectionUnknown
+  cbr.RateForecast:
+    properties:
+      high:
+        type: number
+      low:
+        type: number
+      midpoint:
+        type: number
+      published_at:
+        type: string
+      source_url:
+        type: string
+      year:
+        type: integer
+    type: object
+  cbr.RatePoint:
+    properties:
+      effective_date:
+        type: string
+      rate:
+        type: number
+    type: object
+  cbr.RateSnapshot:
+    properties:
+      current_rate:
+        type: number
+      direction:
+        $ref: '#/definitions/cbr.Direction'
+      fetched_at:
+        type: string
+      forecast:
+        $ref: '#/definitions/cbr.RateForecast'
+      history:
+        items:
+          $ref: '#/definitions/cbr.RatePoint'
+        type: array
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
+  httpserver.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  httpserver.HealthResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  moex.Bond:
+    properties:
+      accrued_interest:
+        type: number
+      bond_subtype:
+        type: string
+      bond_type:
+        type: string
+      cashflow_schedule:
+        items:
+          $ref: '#/definitions/moex.Cashflow'
+        type: array
+      coupon_calendar:
+        items:
+          $ref: '#/definitions/moex.Coupon'
+        type: array
+      coupon_frequency:
+        type: integer
+      coupon_percent:
+        type: number
+      coupon_type:
+        type: string
+      coupon_value:
+        type: number
+      currency:
+        type: string
+      days_to_redemption:
+        type: integer
+      duration:
+        type: number
+      evening_session:
+        type: boolean
+      face_unit:
+        type: string
+      face_value:
+        type: number
+      has_default:
+        type: boolean
+      has_prospectus:
+        type: boolean
+      has_technical_default:
+        type: boolean
+      initial_face_value:
+        type: number
+      instrument_group:
+        type: string
+      is_qualified_investors:
+        type: boolean
+      isin:
+        type: string
+      issue_date:
+        type: string
+      issue_size:
+        type: number
+      issuer_id:
+        type: integer
+      latin_name:
+        type: string
+      list_level:
+        type: integer
+      lot_size:
+        type: integer
+      market_data_as_of:
+        type: string
+      maturity_date:
+        type: string
+      morning_session:
+        type: boolean
+      name:
+        type: string
+      next_coupon_date:
+        type: string
+      num_trades:
+        type: integer
+      price:
+        type: number
+      reg_number:
+        type: string
+      registry_date:
+        type: string
+      secid:
+        type: string
+      short_name:
+        type: string
+      start_date_moex:
+        type: string
+      ticker:
+        type: string
+      type:
+        type: string
+      type_name:
+        type: string
+      value_today:
+        type: number
+      weekend_session:
+        type: boolean
+      yield_to_maturity:
+        type: number
+    type: object
+  moex.Cashflow:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      kind:
+        type: string
+      taxable:
+        type: boolean
+    type: object
+  moex.Coupon:
+    properties:
+      date:
+        type: string
+      value:
+        type: number
+    type: object
+info:
+  contact: {}
+  description: Normalized MOEX bond and Bank of Russia rate data.
+  title: MOEX Gateway API
+  version: "1.0"
+paths:
+  /health:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpserver.HealthResponse'
+      summary: Check gateway health
+      tags:
+      - health
+  /v1/bonds:
+    get:
+      parameters:
+      - default: 40
+        description: Maximum number of bonds
+        in: query
+        maximum: 200
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/moex.Bond'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+      summary: List MOEX bonds
+      tags:
+      - bonds
+  /v1/bonds/{isin}:
+    get:
+      parameters:
+      - description: ISIN
+        in: path
+        maxLength: 12
+        minLength: 12
+        name: isin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/moex.Bond'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+      summary: Get a MOEX bond
+      tags:
+      - bonds
+  /v1/cbr/rates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/cbr.RateSnapshot'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+        "501":
+          description: Not Implemented
+          schema:
+            $ref: '#/definitions/httpserver.ErrorResponse'
+      summary: Get Bank of Russia rate data
+      tags:
+      - cbr
+swagger: "2.0"
