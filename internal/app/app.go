@@ -9,6 +9,7 @@ import (
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/config"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/httpserver"
+	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/logger"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/moex"
 	"github.com/gofiber/fiber/v3"
 )
@@ -21,6 +22,9 @@ type App struct {
 }
 
 func New(cfg config.Config) *App {
+	// Create logger
+	log := logger.New(cfg.LogLevel)
+
 	// Create cache
 	cache := cache.NewRedisCache(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 
@@ -31,7 +35,7 @@ func New(cfg config.Config) *App {
 	// Create CBR service (stub for now)
 	cbrService := cbr.NewStubService()
 
-	router := httpserver.NewRouter(moexService, cbrService)
+	router := httpserver.NewRouter(moexService, cbrService, log)
 	return &App{
 		server:  router,
 		address: cfg.Server.Address(),
