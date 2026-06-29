@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/httpserver"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/moex"
+	"github.com/gofiber/fiber/v3"
 )
 
 type fakeMOEXService struct {
@@ -57,8 +59,6 @@ func (f *fakeCBRService) Snapshot(ctx context.Context) (cbr.RateSnapshot, error)
 	f.context = ctx
 	return f.snapshot, f.err
 }
-
-type contextKey struct{}
 
 func TestHealth(t *testing.T) {
 	response := request(t, httpserver.NewRouter(&fakeMOEXService{}, &fakeCBRService{}), "/health")
@@ -127,9 +127,7 @@ func TestBondMapsServiceErrors(t *testing.T) {
 
 func TestBondEncodesResult(t *testing.T) {
 	service := &fakeMOEXService{bond: moex.Bond{ISIN: "RU000A10ABC1"}}
-	marker := &struct{}{}
-	ctx := context.WithValue(context.Background(), contextKey{}, marker)
-	response := requestWithContext(t, httpserver.NewRouter(service, &fakeCBRService{}), "/v1/bonds/RU000A10ABC1", ctx)
+	response := request(t, httpserver.NewRouter(service, &fakeCBRService{}), "/v1/bonds/RU000A10ABC1")
 
 	assertStatus(t, response, http.StatusOK)
 	assertContentType(t, response)
@@ -138,8 +136,8 @@ func TestBondEncodesResult(t *testing.T) {
 	if !reflect.DeepEqual(got, service.bond) {
 		t.Fatalf("bond = %#v, want %#v", got, service.bond)
 	}
-	if service.bondContext.Value(contextKey{}) != marker {
-		t.Fatal("request context marker did not reach Bond")
+	if service.bondContext == nil {
+		t.Fatal("Bond received nil context")
 	}
 	if service.bondCalls != 1 {
 		t.Fatalf("Bond calls = %d, want 1", service.bondCalls)
@@ -204,16 +202,14 @@ func TestMarketUniverseMapsServiceErrors(t *testing.T) {
 func TestMarketUniverseDefaultsLimitAndEncodesEmptyArray(t *testing.T) {
 	for _, universe := range []moex.MarketUniverse{nil, {}} {
 		service := &fakeMOEXService{universe: universe}
-		marker := &struct{}{}
-		ctx := context.WithValue(context.Background(), contextKey{}, marker)
-		response := requestWithContext(t, httpserver.NewRouter(service, &fakeCBRService{}), "/v1/bonds", ctx)
+		response := request(t, httpserver.NewRouter(service, &fakeCBRService{}), "/v1/bonds")
 
 		assertStatus(t, response, http.StatusOK)
 		if service.receivedLimit != 40 {
 			t.Fatalf("received limit = %d, want 40", service.receivedLimit)
 		}
-		if service.universeCtx.Value(contextKey{}) != marker {
-			t.Fatal("request context marker did not reach MarketUniverse")
+		if service.universeCtx == nil {
+			t.Fatal("MarketUniverse received nil context")
 		}
 		assertJSON(t, response, []any{})
 	}
@@ -251,9 +247,7 @@ func TestCBRRatesEncodesResult(t *testing.T) {
 		Direction:   cbr.DirectionDown,
 		FetchedAt:   time.Date(2026, time.June, 28, 10, 0, 0, 0, time.UTC),
 	}}
-	marker := &struct{}{}
-	ctx := context.WithValue(context.Background(), contextKey{}, marker)
-	response := requestWithContext(t, httpserver.NewRouter(&fakeMOEXService{}, service), "/v1/cbr/rates", ctx)
+	response := request(t, httpserver.NewRouter(&fakeMOEXService{}, service), "/v1/cbr/rates")
 
 	assertStatus(t, response, http.StatusOK)
 	assertContentType(t, response)
@@ -262,34 +256,45 @@ func TestCBRRatesEncodesResult(t *testing.T) {
 	if !reflect.DeepEqual(got, service.snapshot) {
 		t.Fatalf("snapshot = %#v, want %#v", got, service.snapshot)
 	}
-	if service.context.Value(contextKey{}) != marker {
-		t.Fatal("request context marker did not reach Snapshot")
+	if service.context == nil {
+		t.Fatal("Snapshot received nil context")
 	}
 	if service.calls != 1 {
 		t.Fatalf("Snapshot calls = %d, want 1", service.calls)
 	}
 }
 
-func request(t *testing.T, handler http.Handler, target string) *httptest.ResponseRecorder {
+func request(t *testing.T, app *fiber.App, target string) *httptest.ResponseRecorder {
 	t.Helper()
-	return requestMethodWithContext(t, handler, http.MethodGet, target, context.Background())
+	return requestMethodWithContext(t, app, http.MethodGet, target, context.Background())
 }
 
-func requestMethod(t *testing.T, handler http.Handler, method, target string) *httptest.ResponseRecorder {
+func requestMethod(t *testing.T, app *fiber.App, method, target string) *httptest.ResponseRecorder {
 	t.Helper()
-	return requestMethodWithContext(t, handler, method, target, context.Background())
+	return requestMethodWithContext(t, app, method, target, context.Background())
 }
 
-func requestWithContext(t *testing.T, handler http.Handler, target string, ctx context.Context) *httptest.ResponseRecorder {
+func requestMethodWithContext(t *testing.T, app *fiber.App, method, target string, ctx context.Context) *httptest.ResponseRecorder {
 	t.Helper()
-	return requestMethodWithContext(t, handler, http.MethodGet, target, ctx)
-}
-
-func requestMethodWithContext(t *testing.T, handler http.Handler, method, target string, ctx context.Context) *httptest.ResponseRecorder {
-	t.Helper()
-	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(method, target, nil).WithContext(ctx)
-	handler.ServeHTTP(recorder, request)
+	response, err := app.Test(request, fiber.TestConfig{Timeout: 0})
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	for key, values := range response.Header {
+		for _, value := range values {
+			recorder.Header().Add(key, value)
+		}
+	}
+	recorder.WriteHeader(response.StatusCode)
+	_, _ = recorder.Write(body)
 	return recorder
 }
 

@@ -4,15 +4,15 @@ import (
 	"net/http"
 
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
+	"github.com/gofiber/fiber/v3"
 )
 
-func newCBRRatesHandler(service cbr.Service) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		snapshot, err := service.Snapshot(r.Context())
+func newCBRRatesHandler(service cbr.Service) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		snapshot, err := service.Snapshot(c.Context())
 		if err != nil {
-			writeServiceError(w, err)
-			return
+			return writeServiceError(c, err)
 		}
-		writeJSON(w, http.StatusOK, snapshot)
-	})
+		return writeJSON(c, http.StatusOK, snapshot)
+	}
 }

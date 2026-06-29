@@ -8,36 +8,45 @@ import (
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/apperrors"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/moex"
+	"github.com/gofiber/fiber/v3"
 )
 
 type errorResponse struct {
 	Error string `json:"error"`
 }
 
-func NewRouter(moexService moex.Service, cbrService cbr.Service) http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", healthHandler)
-	mux.Handle("GET /v1/bonds/{isin}", newBondHandler(moexService))
-	mux.Handle("GET /v1/bonds", newMarketUniverseHandler(moexService))
-	mux.Handle("GET /v1/cbr/rates", newCBRRatesHandler(cbrService))
-	return mux
+func NewRouter(moexService moex.Service, cbrService cbr.Service) *fiber.App {
+	app := fiber.New(fiber.Config{ErrorHandler: fiberErrorHandler})
+	app.Get("/health", healthHandler)
+	app.Get("/v1/bonds/:isin", newBondHandler(moexService))
+	app.Get("/v1/bonds", newMarketUniverseHandler(moexService))
+	app.Get("/v1/cbr/rates", newCBRRatesHandler(cbrService))
+	return app
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func fiberErrorHandler(c fiber.Ctx, err error) error {
+	status := http.StatusInternalServerError
+	message := "internal server error"
+	var fiberErr *fiber.Error
+	if errors.As(err, &fiberErr) {
+		status = fiberErr.Code
+		message = fiberErr.Message
+	}
+	return writeJSON(c, status, errorResponse{Error: message})
+}
+
+func writeJSON(c fiber.Ctx, status int, value any) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
-		status = http.StatusInternalServerError
-		payload = []byte(`{"error":"internal server error"}`)
+		return err
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write(payload)
+	c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	return c.Status(status).Send(payload)
 }
 
-func writeServiceError(w http.ResponseWriter, err error) {
+func writeServiceError(c fiber.Ctx, err error) error {
 	if errors.Is(err, apperrors.ErrNotImplemented) {
-		writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "not implemented"})
-		return
+		return writeJSON(c, http.StatusNotImplemented, errorResponse{Error: "not implemented"})
 	}
-	writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
+	return writeJSON(c, http.StatusInternalServerError, errorResponse{Error: "internal server error"})
 }

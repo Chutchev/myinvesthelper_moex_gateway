@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/moex"
+	"github.com/gofiber/fiber/v3"
 )
 
 const (
@@ -12,41 +13,37 @@ const (
 	maxUniverseLimit     = 200
 )
 
-func newBondHandler(service moex.Service) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isin := r.PathValue("isin")
+func newBondHandler(service moex.Service) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		isin := c.Params("isin")
 		if !validISIN(isin) {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid ISIN"})
-			return
+			return writeJSON(c, http.StatusBadRequest, errorResponse{Error: "invalid ISIN"})
 		}
 
-		bond, err := service.Bond(r.Context(), isin)
+		bond, err := service.Bond(c.Context(), isin)
 		if err != nil {
-			writeServiceError(w, err)
-			return
+			return writeServiceError(c, err)
 		}
-		writeJSON(w, http.StatusOK, bond)
-	})
+		return writeJSON(c, http.StatusOK, bond)
+	}
 }
 
-func newMarketUniverseHandler(service moex.Service) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		limit, ok := parseLimit(r.URL.Query().Get("limit"))
+func newMarketUniverseHandler(service moex.Service) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		limit, ok := parseLimit(c.Query("limit"))
 		if !ok {
-			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid limit"})
-			return
+			return writeJSON(c, http.StatusBadRequest, errorResponse{Error: "invalid limit"})
 		}
 
-		universe, err := service.MarketUniverse(r.Context(), limit)
+		universe, err := service.MarketUniverse(c.Context(), limit)
 		if err != nil {
-			writeServiceError(w, err)
-			return
+			return writeServiceError(c, err)
 		}
 		if universe == nil {
 			universe = make(moex.MarketUniverse, 0)
 		}
-		writeJSON(w, http.StatusOK, universe)
-	})
+		return writeJSON(c, http.StatusOK, universe)
+	}
 }
 
 func validISIN(isin string) bool {

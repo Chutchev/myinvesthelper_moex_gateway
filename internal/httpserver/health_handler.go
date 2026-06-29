@@ -1,7 +1,7 @@
 package httpserver
 
-import "net/http"
+import "github.com/gofiber/fiber/v3"
 
-func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+func healthHandler(c fiber.Ctx) error {
+	return writeJSON(c, fiber.StatusOK, map[string]string{"status": "ok"})
 }
