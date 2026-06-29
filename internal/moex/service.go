@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/apperrors"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cache"
+	"golang.org/x/sync/errgroup"
 )
 
 const defaultCacheTTL = 15 * time.Minute
@@ -70,7 +72,83 @@ func (s *CachedService) Bond(ctx context.Context, isin string) (Bond, error) {
 }
 
 func (s *CachedService) MarketUniverse(ctx context.Context, limit int) (MarketUniverse, error) {
-	return nil, apperrors.ErrNotImplemented
+	key := "moex:universe:" + fmt.Sprint(limit)
+	var cached MarketUniverse
+	if err := s.cache.Get(ctx, key, &cached); err == nil {
+		return cached, nil
+	} else if !errors.Is(err, apperrors.ErrCacheMiss) {
+		return nil, fmt.Errorf("read universe cache: %w", err)
+	}
+
+	universePayload, err := s.client.FetchUniverse(ctx, 200)
+	if err != nil {
+		return nil, fmt.Errorf("fetch universe: %w", err)
+	}
+	snapshots, err := ParseUniverseResponse(universePayload)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter liquid candidates.
+	var candidates []Bond
+	for _, bond := range snapshots {
+		if liquidBond(bond) {
+			candidates = append(candidates, bond)
+		}
+	}
+	if len(candidates) == 0 {
+		result := make(MarketUniverse, 0)
+		_ = s.cache.Set(ctx, key, result, s.ttl)
+		return result, nil
+	}
+
+	// Sort by VALTODAY descending.
+	sort.Slice(candidates, func(i, j int) bool {
+		vi := 0.0
+		vj := 0.0
+		if candidates[i].ValueToday != nil {
+			vi = *candidates[i].ValueToday
+		}
+		if candidates[j].ValueToday != nil {
+			vj = *candidates[j].ValueToday
+		}
+		return vi > vj
+	})
+
+	// Truncate to limit.
+	if limit > 0 && len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+
+	// Fan-out full bond details with bounded concurrency.
+	sem := make(chan struct{}, 8)
+	eg, egCtx := errgroup.WithContext(ctx)
+
+	result := make(MarketUniverse, len(candidates))
+	for i, snapshot := range candidates {
+		i := i
+		snapshot := snapshot
+		eg.Go(func() error {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			full, err := s.Bond(egCtx, snapshot.ISIN)
+			if err != nil {
+				return fmt.Errorf("bond %s: %w", snapshot.ISIN, err)
+			}
+			result[i] = mergeUniverseSnapshot(full, snapshot)
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	if err := s.cache.Set(ctx, key, result, s.ttl); err != nil {
+		return nil, fmt.Errorf("write universe cache: %w", err)
+	}
+	return result, nil
 }
 
 func mergeMarketData(bond *Bond, market *BondMarketData) {
@@ -116,4 +194,39 @@ func mergeMarketData(bond *Bond, market *BondMarketData) {
 	if market.WeekendSession != nil {
 		bond.WeekendSession = market.WeekendSession
 	}
+}
+
+func liquidBond(bond Bond) bool {
+	return bond.FaceUnit != nil && (*bond.FaceUnit == "RUB" || *bond.FaceUnit == "SUR") &&
+		bond.ValueToday != nil && *bond.ValueToday > 1_000_000 &&
+		bond.NumTrades != nil && *bond.NumTrades > 10 && bond.Price != nil
+}
+
+func mergeUniverseSnapshot(full Bond, snapshot Bond) Bond {
+	full.Ticker = snapshot.Ticker
+	if full.Name == nil {
+		full.Name = snapshot.Name
+	}
+	if full.ShortName == nil {
+		full.ShortName = snapshot.ShortName
+	}
+	if full.LotSize == nil {
+		full.LotSize = snapshot.LotSize
+	}
+	if full.FaceUnit == nil {
+		full.FaceUnit = snapshot.FaceUnit
+	}
+	if full.Currency == nil {
+		full.Currency = snapshot.Currency
+	}
+	if full.MorningSession == nil {
+		full.MorningSession = snapshot.MorningSession
+	}
+	if full.EveningSession == nil {
+		full.EveningSession = snapshot.EveningSession
+	}
+	if full.WeekendSession == nil {
+		full.WeekendSession = snapshot.WeekendSession
+	}
+	return full
 }
