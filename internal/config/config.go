@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -14,6 +15,9 @@ type Config struct {
 	CBRForecastPageURL string
 	HTTPTimeout        time.Duration
 	MarketCacheTTL     time.Duration
+	RedisAddr          string
+	RedisPassword      string
+	RedisDB            int
 	LogLevel           string
 }
 
@@ -33,6 +37,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid MARKET_CACHE_TTL: %w", err)
 	}
 
+	redisDB, err := strconv.Atoi(getEnv("REDIS_DB", "0"))
+	if err != nil || redisDB < 0 {
+		return nil, fmt.Errorf("invalid REDIS_DB: must be a non-negative integer")
+	}
+
 	return &Config{
 		Server:             ServerConfig{Host: getEnv("SERVER_HOST", "0.0.0.0"), Port: getEnv("SERVER_PORT", "8080")},
 		MOEXBaseURL:        getEnv("MOEX_BASE_URL", "https://iss.moex.com/iss"),
@@ -40,6 +49,9 @@ func Load() (*Config, error) {
 		CBRForecastPageURL: getEnv("CBR_FORECAST_PAGE_URL", "https://www.cbr.ru/statistics/ddkp/mo_br/"),
 		HTTPTimeout:        timeout,
 		MarketCacheTTL:     ttl,
+		RedisAddr:          getEnv("REDIS_ADDR", "localhost:6379"),
+		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
+		RedisDB:            redisDB,
 		LogLevel:           getEnv("LOG_LEVEL", "info"),
 	}, nil
 }

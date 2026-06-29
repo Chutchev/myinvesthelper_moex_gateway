@@ -14,6 +14,9 @@ func TestLoadReadsGatewayConfiguration(t *testing.T) {
 	t.Setenv("CBR_FORECAST_PAGE_URL", "https://cbr.test/forecast")
 	t.Setenv("HTTP_TIMEOUT", "3s")
 	t.Setenv("MARKET_CACHE_TTL", "15m")
+	t.Setenv("REDIS_ADDR", "redis.test:6380")
+	t.Setenv("REDIS_PASSWORD", "test-password")
+	t.Setenv("REDIS_DB", "2")
 
 	cfg, err := Load()
 	if err != nil {
@@ -37,6 +40,15 @@ func TestLoadReadsGatewayConfiguration(t *testing.T) {
 	}
 	if got, want := cfg.MarketCacheTTL, 15*time.Minute; got != want {
 		t.Errorf("MarketCacheTTL = %v, want %v", got, want)
+	}
+	if got, want := cfg.RedisAddr, "redis.test:6380"; got != want {
+		t.Errorf("RedisAddr = %q, want %q", got, want)
+	}
+	if got, want := cfg.RedisPassword, "test-password"; got != want {
+		t.Errorf("RedisPassword = %q, want %q", got, want)
+	}
+	if got, want := cfg.RedisDB, 2; got != want {
+		t.Errorf("RedisDB = %d, want %d", got, want)
 	}
 }
 
@@ -64,5 +76,19 @@ func TestLoadRejectsInvalidDurations(t *testing.T) {
 				t.Errorf("Load() error = %q, want substring %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoadRejectsInvalidRedisDB(t *testing.T) {
+	t.Setenv("HTTP_TIMEOUT", "10s")
+	t.Setenv("MARKET_CACHE_TTL", "15m")
+	t.Setenv("REDIS_DB", "not-an-int")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "invalid REDIS_DB") {
+		t.Errorf("Load() error = %q, want substring %q", err, "invalid REDIS_DB")
 	}
 }
