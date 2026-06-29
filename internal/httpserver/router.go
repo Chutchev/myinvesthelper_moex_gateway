@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"time"
 
 	_ "github.com/Chutchev/myinvesthelper_moex_gateway/docs"
@@ -60,12 +61,17 @@ func writeJSON(c fiber.Ctx, status int, value any) error {
 }
 
 func writeServiceError(c fiber.Ctx, err error) error {
+	// Capture stack trace
+	stack := string(debug.Stack())
+
 	if errors.Is(err, apperrors.ErrNotImplemented) {
 		c.Locals("error_message", "not implemented")
 		c.Locals("error_details", fmt.Sprintf("%+v", err))
+		c.Locals("error_stack", stack)
 		return writeJSON(c, http.StatusNotImplemented, ErrorResponse{Error: "not implemented"})
 	}
 	c.Locals("error_message", "internal server error")
 	c.Locals("error_details", fmt.Sprintf("%+v", err))
+	c.Locals("error_stack", stack)
 	return writeJSON(c, http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
 }
