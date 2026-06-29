@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cache"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/cbr"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/config"
 	"github.com/Chutchev/myinvesthelper_moex_gateway/internal/httpserver"
@@ -20,7 +21,17 @@ type App struct {
 }
 
 func New(cfg config.Config) *App {
-	router := httpserver.NewRouter(moex.NewStubService(), cbr.NewStubService())
+	// Create cache
+	cache := cache.NewRedisCache(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
+
+	// Create MOEX client and service
+	moexClient := moex.NewHTTPClient(cfg.MOEXBaseURL, cfg.HTTPTimeout)
+	moexService := moex.NewService(moexClient, cache, cfg.MarketCacheTTL)
+
+	// Create CBR service (stub for now)
+	cbrService := cbr.NewStubService()
+
+	router := httpserver.NewRouter(moexService, cbrService)
 	return &App{
 		server:  router,
 		address: cfg.Server.Address(),
